@@ -1,0 +1,48 @@
+/* ===== 设计变量（Design Tokens） =====
+   主题：社会治理数据分析与风险预警系统
+   基调：沉稳、可信、克制 —— 深靛蓝为主色，克制使用风险色（仅用于等级标识），
+   避免撞上生成式设计的常见默认（暖米色+赤陶色 / 纯黑+荧光绿 / 卡片阴影泛滥）。
+*/
+:root {
+  --color-ink: #12203a;        /* 主文字 / 深靛蓝品牌色 */
+  --color-ink-soft: #3c4a63;   /* 次要文字 */
+  --color-line: #dfe3ea;       /* 分隔线 */
+  --color-bg: #f4f6f9;         /* 页面底色 */
+  --color-surface: #ffffff;    /* 卡片/面板底色 */
+  --color-brand: #1d3a63;      /* 品牌主色：深靛蓝 */
+  --color-brand-strong: #0f2647;
+  --color-accent: #2f7a6d;     /* 辅助色：克制的墨绿，用于强调、按钮 hover */
+  --color-risk-low: #2f7a6d;
+  --color-risk-mid: #b8862f;
+  --color-risk-high: #a13d34;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
