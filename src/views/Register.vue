@@ -26,8 +26,8 @@
         <p class="brand-eyebrow">社会治理数字化平台</p>
         <h1 class="brand-title">社会治理数据分析<br />与风险预警系统</h1>
         <p class="brand-desc">
-          账号按角色划分权限：县综治中心、其他单位、重点人群三类角色，
-          分别对应不同的数据边界与操作权限。
+          县综治中心负责风险分析研判，其他职能部门和乡镇、基层治理单位负责上报本单位事件，
+          重点人群使用独立账号录入重点关注事件。选择所属单位后，系统会自动分配对应的角色和数据范围。
         </p>
       </div>
     </div>
@@ -35,56 +35,31 @@
     <div class="auth-panel">
       <div class="auth-card">
         <h2 class="auth-title">注册账号</h2>
-        <p class="auth-subtitle">请选择与本单位对应的角色</p>
+        <p class="auth-subtitle">请选择您所属的单位</p>
 
-        <el-form
-          ref="formRef"
-          :model="form"
-          :rules="rules"
-          class="auth-form"
-          @keyup.enter="handleSubmit"
-        >
+        <el-form ref="formRef" :model="form" :rules="rules" class="auth-form" @keyup.enter="handleSubmit">
           <el-form-item prop="username">
             <el-input v-model="form.username" placeholder="用户名" size="large" :prefix-icon="User" />
           </el-form-item>
           <el-form-item prop="password">
-            <el-input
-              v-model="form.password"
-              type="password"
-              placeholder="密码"
-              size="large"
-              show-password
-              :prefix-icon="Lock"
-            />
+            <el-input v-model="form.password" type="password" placeholder="密码" size="large" show-password
+              :prefix-icon="Lock" />
           </el-form-item>
           <el-form-item prop="confirmPassword">
-            <el-input
-              v-model="form.confirmPassword"
-              type="password"
-              placeholder="确认密码"
-              size="large"
-              show-password
-              :prefix-icon="Lock"
-            />
+            <el-input v-model="form.confirmPassword" type="password" placeholder="确认密码" size="large" show-password
+              :prefix-icon="Lock" />
           </el-form-item>
-          <el-form-item prop="role">
-            <el-select v-model="form.role" placeholder="请选择角色" size="large" class="auth-select">
-              <el-option
-                v-for="opt in ROLE_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
+          <el-form-item prop="unit">
+            <el-select v-model="form.unit" placeholder="请选择所属单位（可输入搜索）" size="large" class="auth-select" filterable
+              :loading="unitsLoading" no-data-text="暂无可选单位" @visible-change="handleSelectOpen">
+              <el-option-group v-for="group in unitGroups" :key="group.category" :label="group.category">
+                <el-option v-for="name in group.units" :key="name" :label="name" :value="name" />
+              </el-option-group>
             </el-select>
+            <p v-if="selectedRoleLabel" class="auth-role-hint">注册后的角色：{{ selectedRoleLabel }}</p>
           </el-form-item>
           <el-form-item>
-            <el-button
-              type="primary"
-              size="large"
-              class="auth-submit"
-              :loading="loading"
-              @click="handleSubmit"
-            >
+            <el-button type="primary" size="large" class="auth-submit" :loading="loading" @click="handleSubmit">
               注册
             </el-button>
           </el-form-item>
@@ -100,23 +75,53 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { register } from '../api/auth'
-import { ROLE_OPTIONS } from '../utils/role'
+import { register, getUnits } from '../api/auth'
+import { ROLE_LABEL } from '../utils/role'
 
 const router = useRouter()
 const formRef = ref()
 const loading = ref(false)
+const unitsLoading = ref(false)
+
+// 后端返回：[{ category: '政法及司法单位', role: 'REPORTER', units: ['法院', ...] }, ...]
+const unitGroups = ref([])
 
 const form = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  role: null,
+  unit: '',
 })
+
+// 角色由后端根据单位推导，这里仅用于向用户预览，不随表单提交
+const selectedRoleLabel = computed(() => {
+  const group = unitGroups.value.find((g) => g.units.includes(form.unit))
+  // const group = unitGroups.value.find((g) => g.includes(form.unit))
+  return group ? ROLE_LABEL[group.role] || '' : ''
+})
+
+async function loadUnits() {
+  unitsLoading.value = true
+  try {
+    const res = await getUnits()
+    unitGroups.value = Array.isArray(res) ? res : res?.data ?? []
+    // console.log('-========',unitGroups.value)
+  } catch (err) {
+    // 失败已由响应拦截器统一 toast 提示，下拉展开时会再次尝试加载
+  } finally {
+    unitsLoading.value = false
+  }
+}
+
+function handleSelectOpen(visible) {
+  if (visible && !unitGroups.value.length && !unitsLoading.value) loadUnits()
+}
+
+onMounted(loadUnits)
 
 function validateConfirm(rule, value, callback) {
   if (value !== form.password) {
@@ -133,7 +138,7 @@ const rules = {
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' },
   ],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  unit: [{ required: true, message: '请选择所属单位', trigger: 'change' }],
 }
 
 async function handleSubmit() {
@@ -142,10 +147,11 @@ async function handleSubmit() {
 
   loading.value = true
   try {
+    // 只提交 unit，role 由后端推导
     await register({
       username: form.username,
       password: form.password,
-      role: form.role,
+      unit: form.unit,
     })
     ElMessage.success('注册成功，请登录')
     router.push('/login')
@@ -248,6 +254,13 @@ async function handleSubmit() {
   width: 100%;
 }
 
+.auth-role-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-soft);
+}
+
 .auth-submit {
   width: 100%;
   background: var(--color-brand);
@@ -279,6 +292,7 @@ async function handleSubmit() {
   .auth-brand {
     display: none;
   }
+
   .auth-panel {
     flex: 1;
   }

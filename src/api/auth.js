@@ -25,3 +25,11 @@ export function register(data) {
 export function getUserInfo() {
   return request.get('/user/info')
 }
+
+
+/**
+ * 查询单位
+*/
+export function getUnits() {
+  return request.get('/auth/units')
+}

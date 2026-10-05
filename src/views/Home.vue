@@ -26,6 +26,9 @@
         <el-form-item label="当事人">
           <el-input v-model="query.partyName" placeholder="姓名" clearable style="width: 140px" />
         </el-form-item>
+        <el-form-item label="部门">
+          <el-input v-model="query.department" placeholder="部门" clearable style="width: 140px" />
+        </el-form-item>
         <el-form-item label="纠纷类型">
           <el-input v-model="query.disputeType" placeholder="纠纷类型" clearable style="width: 160px" />
         </el-form-item>
@@ -272,7 +275,7 @@ const isOverdue = (row) =>
   row.isCompleted !== 1 && row.handlingDeadline && new Date(row.handlingDeadline) < new Date()
 
 // ---------- 列表 ----------
-const query = reactive({ partyName: '', disputeType: '', keyword: '' })
+const query = reactive({ partyName: '', disputeType: '', keyword: '',department: '' })
 const occurredRange = ref(null)
 const createRange = ref(null)
 const page = reactive({ currentPage: 1, pageSize: 10, total: 0 })

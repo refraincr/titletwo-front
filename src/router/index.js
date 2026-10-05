@@ -24,25 +24,25 @@ const routes = [
         path: 'home',
         name: 'Home',
         component: () => import('../views/Home.vue'),
-        meta: { title: '首页', roles: [1, 2, 3] },
+        meta: { title: '首页', roles: ['ADMIN', 'ANALYST', 'REPORTER','KEY_PERSON'] },
       },
       {
         path: 'report',
         name: 'PriorityReport',
         component: () => import('../views/PriorityReport.vue'),
-        meta: { title: '重点事件录入', roles: [2] },
+        meta: { title: '重点事件录入', roles: ['KEY_PERSON'] },
       },
       {
         path: 'admin',
         name: 'AdminPanel',
         component: () => import('../views/AdminPanel.vue'),
-        meta: { title: '系统管理', roles: [3] },
+        meta: { title: '系统管理', roles: ['ADMIN'] },
       },
       {
         path: 'profile',
         name: 'Profile',
         component: () => import('../views/Profile.vue'),
-        meta: { title: '个人中心', roles: [1, 2, 3] },
+        meta: { title: '个人中心', roles: ['ADMIN', 'ANALYST', 'REPORTER','KEY_PERSON']},
       },
     ],
   },
@@ -65,31 +65,28 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
   const userStore = useUserStore()
   document.title = to.meta.title ? `${to.meta.title} - 社会治理风险预警系统` : '社会治理风险预警系统'
 
   // 公开页面（登录/注册/403/404）直接放行
   if (to.meta.public) {
-    next()
     return
   }
 
   // 未登录访问需鉴权页面 -> 跳转登录页，并记录来源用于登录后跳回
   if (!userStore.isLoggedIn) {
-    next({ path: '/login', query: { redirect: to.fullPath } })
-    return
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
 
   // 已登录但当前角色不在该路由允许的角色列表内 -> 提示无权限，跳 403 页
   const allowedRoles = to.meta.roles
   if (allowedRoles && !allowedRoles.includes(userStore.role)) {
     ElMessage.error('无权限访问该页面')
-    next({ path: '/403' })
-    return
+    return { path: '/403' }
   }
 
-  next()
+  return
 })
 
 export default router
