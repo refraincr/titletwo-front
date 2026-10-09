@@ -174,13 +174,6 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="风险等级" prop="eventRiskLevel">
-              <el-select v-model="form.eventRiskLevel" clearable placeholder="选填" style="width: 100%">
-                <el-option v-for="(v, k) in RISK_MAP" :key="k" :label="v.label" :value="k" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="处理期限" prop="handlingDeadline">
               <el-date-picker v-model="form.handlingDeadline" type="datetime" :value-format="TIME_FORMAT" placeholder="选填" style="width: 100%" />
             </el-form-item>
@@ -256,7 +249,7 @@ import { getRecordPage, addRecord, editRecord, deleteRecord } from '../api/recor
 
 // 角色：2-风险上报员，3-系统管理员 可新增/编辑/删除；1-数据分析员只读
 // 仅用于控制按钮显示，真正的权限以后端校验为准
-const EDIT_ROLES = [2, 3]
+const EDIT_ROLES = ['ANALYST', 'REPORTER', 'ADMIN']
 
 const TIME_FORMAT = 'YYYY-MM-DD[T]HH:mm:ss'
 const RISK_MAP = {
@@ -268,7 +261,7 @@ const SOURCE_OPTIONS = ['群众上报', '12345热线', '网格巡查']
 const CATEGORY_OPTIONS = ['民事纠纷', '劳动纠纷', '邻里纠纷']
 
 const userStore = useUserStore()
-const canEdit = computed(() => EDIT_ROLES.includes(Number(userStore.role)))
+const canEdit = computed(() => EDIT_ROLES.includes(userStore.role))
 
 const fmtTime = (v) => (v ? String(v).replace('T', ' ') : '-')
 const isOverdue = (row) =>
