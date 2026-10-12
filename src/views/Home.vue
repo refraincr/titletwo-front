@@ -210,33 +210,71 @@
     </el-dialog>
 
     <!-- 详情 -->
-    <el-drawer v-model="detailVisible" title="事件详情" size="560px">
-      <el-descriptions v-if="detail" :column="1" border label-width="110px">
-        <el-descriptions-item label="发生时间">{{ fmtTime(detail.occurredAt) }}</el-descriptions-item>
-        <el-descriptions-item label="具体问题">{{ detail.problemDescription || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="当事人姓名">{{ detail.partyName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="身份证号">{{ detail.partyIdCard || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="联系电话">{{ detail.partyPhone || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="联系地址">{{ detail.partyAddress || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="经办人">{{ detail.handlerName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="处理情况">{{ detail.handlingDescription || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="事件来源">{{ detail.eventSource || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="事件类别">{{ detail.eventCategory || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="纠纷类型">{{ detail.disputeType || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="风险等级">{{ RISK_MAP[detail.eventRiskLevel]?.label || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="处理期限">{{ fmtTime(detail.handlingDeadline) }}</el-descriptions-item>
-        <el-descriptions-item label="是否办结">{{ detail.isCompleted === 1 ? '已办结' : '未办结' }}</el-descriptions-item>
-        <el-descriptions-item label="复核状态">{{ detail.reviewStatus === 1 ? '已复核' : '待复核' }}</el-descriptions-item>
-        <el-descriptions-item label="关键词标签">{{ detail.keywordTags || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="匹配状态">{{ detail.matchStatus ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="匹配人员档案">{{ detail.matchedPersonId ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="匹配时间">{{ fmtTime(detail.matchedAt) }}</el-descriptions-item>
-        <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="上报人">{{ detail.createdBy || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="上报时间">{{ fmtTime(detail.gmtCreate) }}</el-descriptions-item>
-        <el-descriptions-item label="最后修改人">{{ detail.modifiedBy || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="最后修改时间">{{ fmtTime(detail.gmtModified) }}</el-descriptions-item>
-      </el-descriptions>
+    <el-drawer v-model="detailVisible" title="事件详情" size="560px" @closed="onDetailClosed">
+      <template v-if="detail">
+        <!-- 风险依据：独立加载，不影响下方主表格 -->
+        <div class="risk-basis">
+          <div class="risk-basis__head">
+            <span class="risk-basis__title">风险依据</span>
+            <el-tag v-if="RISK_MAP[detail.eventRiskLevel]" size="small" :type="RISK_MAP[detail.eventRiskLevel].type">
+              {{ RISK_MAP[detail.eventRiskLevel].label }}
+            </el-tag>
+            <span v-else class="risk-basis__muted">-</span>
+          </div>
+          <div v-loading="riskLoading" class="risk-basis__body">
+            <div v-if="riskForbidden" class="risk-basis__tip">无权查看风险依据</div>
+            <div v-else-if="riskError" class="risk-basis__tip">
+              依据加载失败
+              <el-button link type="primary" @click="loadRisk(detail.id)">重试</el-button>
+            </div>
+            <el-descriptions v-else-if="risk" :column="1" border label-width="190px">
+              <el-descriptions-item label="命中关键词（影响风险等级）">
+                <template v-if="riskKeywords.length">
+                  <el-tag v-for="(k, i) in riskKeywords" :key="i" size="small" type="danger" class="risk-basis__tag">
+                    {{ k }}
+                  </el-tag>
+                </template>
+                <span v-else class="risk-basis__muted">未命中风险关键词</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="是否特殊账号">
+                <el-tag v-if="riskSpecial === true" size="small" type="danger">特殊账号</el-tag>
+                <el-tag v-else-if="riskSpecial === false" size="small" type="info">否</el-tag>
+                <span v-else>-</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="当事人关联事件次数">
+                {{ risk.partyEventCount != null ? `${risk.partyEventCount} 次` : '-' }}
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </div>
+
+        <el-descriptions :column="1" border label-width="110px">
+          <el-descriptions-item label="发生时间">{{ fmtTime(detail.occurredAt) }}</el-descriptions-item>
+          <el-descriptions-item label="具体问题">{{ detail.problemDescription || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="当事人姓名">{{ detail.partyName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="身份证号">{{ detail.partyIdCard || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="联系电话">{{ detail.partyPhone || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="联系地址">{{ detail.partyAddress || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="经办人">{{ detail.handlerName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="处理情况">{{ detail.handlingDescription || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="事件来源">{{ detail.eventSource || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="事件类别">{{ detail.eventCategory || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="纠纷类型">{{ detail.disputeType || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="风险等级">{{ RISK_MAP[detail.eventRiskLevel]?.label || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="处理期限">{{ fmtTime(detail.handlingDeadline) }}</el-descriptions-item>
+          <el-descriptions-item label="是否办结">{{ detail.isCompleted === 1 ? '已办结' : '未办结' }}</el-descriptions-item>
+          <el-descriptions-item label="复核状态">{{ detail.reviewStatus === 1 ? '已复核' : '待复核' }}</el-descriptions-item>
+          <el-descriptions-item label="提取关键词">{{ detail.keywordTags || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="匹配状态">{{ detail.matchStatus ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="匹配人员档案">{{ detail.matchedPersonId ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="匹配时间">{{ fmtTime(detail.matchedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="上报人">{{ detail.createdBy || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="上报时间">{{ fmtTime(detail.gmtCreate) }}</el-descriptions-item>
+          <el-descriptions-item label="最后修改人">{{ detail.modifiedBy || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="最后修改时间">{{ fmtTime(detail.gmtModified) }}</el-descriptions-item>
+        </el-descriptions>
+      </template>
     </el-drawer>
   </div>
 </template>
@@ -246,6 +284,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { getRecordPage, addRecord, editRecord, deleteRecord } from '../api/record'
+import { getRiskRead } from '../api/risk'
 
 // 角色：2-风险上报员，3-系统管理员 可新增/编辑/删除；1-数据分析员只读
 // 仅用于控制按钮显示，真正的权限以后端校验为准
@@ -406,9 +445,67 @@ async function onSave() {
 const detailVisible = ref(false)
 const detail = ref(null)
 
+// 风险依据：每次打开抽屉都重新请求，不缓存
+const risk = ref(null)
+const riskLoading = ref(false)
+const riskError = ref(false)
+const riskForbidden = ref(false)
+let riskSeq = 0 // 请求序号：响应回来时序号已变，说明抽屉已切换/关闭，丢弃结果
+
+// keywords 为 JSON 数组字符串：null / [] 视为未命中；解析失败则原样作为一个标签显示，不吞掉异常数据
+function parseKeywords(raw) {
+  if (raw === null || raw === undefined || raw === '') return []
+  try {
+    const arr = JSON.parse(raw)
+    if (Array.isArray(arr)) return arr.map(String).filter((s) => s !== '')
+  } catch {
+    // 落到下面的原样显示
+  }
+  return [String(raw)]
+}
+
+const riskKeywords = computed(() => parseKeywords(risk.value?.keywords))
+
+// 兼容 true/1、false/0；其他（null/undefined）返回 null 显示“-”
+const riskSpecial = computed(() => {
+  const v = risk.value?.isSpecialAccount
+  if (v === true || v === 1) return true
+  if (v === false || v === 0) return false
+  return null
+})
+
+async function loadRisk(eventId) {
+  const seq = ++riskSeq
+  risk.value = null
+  riskError.value = false
+  riskForbidden.value = false
+  riskLoading.value = true
+  try {
+    const res = await getRiskRead(eventId)
+    if (seq !== riskSeq) return
+    risk.value = res.data || {}
+  } catch (err) {
+    if (seq !== riskSeq) return
+    // 403：无权限，不提供重试；其余（业务失败/网络错误）允许重试。toast 已由拦截器统一弹出
+    if (err?.response?.status === 403) riskForbidden.value = true
+    else riskError.value = true
+  } finally {
+    if (seq === riskSeq) riskLoading.value = false
+  }
+}
+
 function openDetail(row) {
   detail.value = row
   detailVisible.value = true
+  loadRisk(row.id)
+}
+
+function onDetailClosed() {
+  riskSeq++ // 作废仍在途的请求
+  risk.value = null
+  riskLoading.value = false
+  riskError.value = false
+  riskForbidden.value = false
 }
 
 // ---------- 删除（软删除） ----------
@@ -463,5 +560,34 @@ onMounted(fetchList)
 .overdue {
   color: var(--el-color-danger);
   font-weight: 600;
+}
+
+/* 风险依据 */
+.risk-basis {
+  margin-bottom: 20px;
+}
+.risk-basis__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.risk-basis__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.risk-basis__body {
+  min-height: 56px;
+}
+.risk-basis__tip,
+.risk-basis__muted {
+  color: var(--el-text-color-secondary);
+}
+.risk-basis__tip {
+  padding: 16px 0;
+  text-align: center;
+}
+.risk-basis__tag {
+  margin: 0 6px 4px 0;
 }
 </style>

@@ -16,7 +16,7 @@ export function getRecordPage(params) {
  * 必填（后端）：occurredAt、disputeType、problemDescription
  */
 export function addRecord(data) {
-  return request.post('/record/add', data)
+  return request.post('/record/input', data)
 }
 
 /**
