@@ -41,7 +41,8 @@
         </el-form-item>
         <el-form-item>
           <el-button v-if="canEdit" type="primary" @click="openForm()">手动录入</el-button>
-          <el-button v-if="canEdit" type="primary" @click="openForm()">Excel导入</el-button>
+          <!-- Excel 导入：所有角色可见，权限以后端为准 -->
+          <el-button type="primary" @click="openImport">Excel导入</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -50,7 +51,6 @@
     <el-card shadow="never" class="block">
       <div class="toolbar">
         <span class="title">风险事件</span>
-        <!-- <el-button v-if="canEdit" type="primary" @click="openForm()">新增事件</el-button> -->
       </div>
 
       <el-table :data="list" v-loading="loading" border row-key="id">
@@ -209,6 +209,51 @@
       </template>
     </el-dialog>
 
+    <!-- Excel 导入 -->
+    <el-dialog
+      v-model="importVisible"
+      title="Excel导入"
+      width="560px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!importing"
+      :show-close="!importing"
+      @closed="resetImport"
+    >
+      <div class="import-tip">
+        <div class="import-tip__head">
+          <span class="import-tip__title">导入前请确认</span>
+          <el-button link type="primary" :loading="templateLoading" @click="onDownloadTemplate">下载导入模板</el-button>
+        </div>
+        <ul class="import-tip__list">
+          <li>支持 .xls、.xlsx、.csv，文件不超过 {{ IMPORT_MAX_MB }}MB，最多 {{ IMPORT_MAX_ROWS }} 行数据。</li>
+          <li>请使用模板，表头名称必须与模板一致；Excel 文件只读取第一个工作表。</li>
+          <li>发生时间、处理期限的格式为 yyyy-MM-dd HH:mm:ss，例如 2026-10-16 09:30:00。</li>
+          <li>是否办结只能填写“已办结”或“未办结”。</li>
+          <li>联系电话、身份证号请将单元格设置为文本格式。</li>
+          <li>只要有一行不符合要求，整份文件都不会导入，请按提示修改后重新上传。</li>
+        </ul>
+      </div>
+
+      <el-upload
+        ref="uploadRef"
+        :auto-upload="false"
+        :limit="1"
+        :disabled="importing"
+        accept=".xls,.xlsx,.csv"
+        :on-change="onFileChange"
+        :on-remove="onFileRemove"
+        :on-exceed="onFileExceed"
+      >
+        <el-button :disabled="importing">选择文件</el-button>
+      </el-upload>
+      <div v-if="importing" class="import-tip__busy">正在导入，请勿关闭页面</div>
+
+      <template #footer>
+        <el-button :disabled="importing" @click="importVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="onImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 详情 -->
     <el-drawer v-model="detailVisible" title="事件详情" size="560px" @closed="onDetailClosed">
       <template v-if="detail">
@@ -281,14 +326,21 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, genFileId } from 'element-plus'
 import { useUserStore } from '../stores/user'
-import { getRecordPage, addRecord, editRecord, deleteRecord } from '../api/record'
+import {
+  getRecordPage,
+  addRecord,
+  editRecord,
+  deleteRecord,
+  importRecord,
+  downloadImportTemplate,
+} from '../api/record'
 import { getRiskRead } from '../api/risk'
 
 // 角色：2-风险上报员，3-系统管理员 可新增/编辑/删除；1-数据分析员只读
 // 仅用于控制按钮显示，真正的权限以后端校验为准
-const EDIT_ROLES = ['ANALYST', 'REPORTER', 'ADMIN']
+const EDIT_ROLES = ['ANALYST', 'REPORTER', 'ADMIN', 'KEY_PERSON']
 
 const TIME_FORMAT = 'YYYY-MM-DD[T]HH:mm:ss'
 const RISK_MAP = {
@@ -298,6 +350,11 @@ const RISK_MAP = {
 }
 const SOURCE_OPTIONS = ['群众上报', '12345热线', '网格巡查']
 const CATEGORY_OPTIONS = ['民事纠纷', '劳动纠纷', '邻里纠纷']
+
+// Excel 导入：上限需与后端保持一致（文件 10MB，数据 2000 行）
+const IMPORT_MAX_MB = 10
+const IMPORT_MAX_ROWS = 2000
+const IMPORT_EXTS = ['xls', 'xlsx', 'csv']
 
 const userStore = useUserStore()
 const canEdit = computed(() => EDIT_ROLES.includes(userStore.role))
@@ -441,6 +498,93 @@ async function onSave() {
   }
 }
 
+// ---------- Excel 导入 ----------
+const importVisible = ref(false)
+const importing = ref(false)
+const templateLoading = ref(false)
+const uploadRef = ref()
+const importFile = ref(null) // el-upload 的文件对象，真实文件在 .raw
+
+function openImport() {
+  importVisible.value = true
+}
+
+function resetImport() {
+  importFile.value = null
+  uploadRef.value?.clearFiles()
+}
+
+// 选择文件时做前端预校验；后端会再校验一遍，这里只为尽早提示
+function onFileChange(file) {
+  const ext = String(file.name).split('.').pop().toLowerCase()
+  if (!IMPORT_EXTS.includes(ext)) {
+    ElMessage.error('仅支持 .xls、.xlsx、.csv 文件')
+    uploadRef.value.clearFiles()
+    importFile.value = null
+    return
+  }
+  if (file.size > IMPORT_MAX_MB * 1024 * 1024) {
+    ElMessage.error(`文件不能超过 ${IMPORT_MAX_MB}MB`)
+    uploadRef.value.clearFiles()
+    importFile.value = null
+    return
+  }
+  importFile.value = file
+}
+
+function onFileRemove() {
+  importFile.value = null
+}
+
+// 已选一个文件后再选，直接替换
+function onFileExceed(files) {
+  uploadRef.value.clearFiles()
+  const file = files[0]
+  file.uid = genFileId()
+  uploadRef.value.handleStart(file)
+}
+
+async function onImport() {
+  if (!importFile.value) return
+  importing.value = true
+  try {
+    await importRecord(importFile.value.raw)
+    ElMessage.success('导入成功')
+    importVisible.value = false
+    page.currentPage = 1
+    fetchList()
+  } catch {
+    // 校验失败的原因（含行号）由 request 拦截器统一弹出。
+    // 对话框保持打开；清空已选文件，避免未修改就重复提交同一份文件
+    uploadRef.value?.clearFiles()
+    importFile.value = null
+  } finally {
+    importing.value = false
+  }
+}
+
+async function onDownloadTemplate() {
+  templateLoading.value = true
+  try {
+    const res = await downloadImportTemplate()
+    // 兼容拦截器直接返回 Blob，或返回完整 axios 响应两种情况
+    const blob = res instanceof Blob ? res : res?.data
+    if (!(blob instanceof Blob)) throw new Error('invalid template response')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '风险事件导入模板.xlsx'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('模板下载失败，请稍后重试')
+  } finally {
+    templateLoading.value = false
+  }
+}
+
 // ---------- 详情 ----------
 const detailVisible = ref(false)
 const detail = ref(null)
@@ -560,6 +704,35 @@ onMounted(fetchList)
 .overdue {
   color: var(--el-color-danger);
   font-weight: 600;
+}
+
+/* Excel 导入 */
+.import-tip {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+.import-tip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.import-tip__title {
+  font-weight: 600;
+}
+.import-tip__list {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.8;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+}
+.import-tip__busy {
+  margin-top: 8px;
+  color: var(--el-color-warning);
+  font-size: 13px;
 }
 
 /* 风险依据 */

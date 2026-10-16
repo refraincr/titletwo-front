@@ -34,3 +34,31 @@ export function editRecord(data) {
 export function deleteRecord(id) {
   return request.delete('/record/del', { params: { id } })
 }
+
+/**
+ * Excel/CSV 导入风险事件（xls / xlsx / csv）
+ * 成功无返回内容；校验失败由后端抛 BusinessException，拦截器统一提示，整份文件不入库
+ * 同步处理，单独放宽超时到 120 秒
+ * @param {File} file 原始文件对象（el-upload 文件的 .raw）
+ */
+export function importRecord(file) {
+  const fd = new FormData()
+  fd.append('file', file) // 字段名必须是 file，对应后端 @RequestParam("file")
+  return request.post('/record/file_input', fd, {
+    timeout: 120000,
+    // 显式声明，防止实例默认的 JSON Content-Type 把 FormData 序列化掉
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+/**
+ * 下载导入模板（后端生成的 xlsx）
+ * 路径为占位，按后端实际接口修改
+ * @returns Promise<Blob | AxiosResponse> 取决于 utils/request 拦截器是否解包
+ */
+export function downloadImportTemplate() {
+  return request.get('/record/import_template', {
+    responseType: 'blob',
+    timeout: 30000,
+  })
+}

@@ -33,7 +33,7 @@ export const MENU_MAP = {
     { path: '/profile', name: 'Profile', title: '个人中心', icon: 'User' },
   ],
   [ROLES.KEY_PERSON]: [
-    { path: '/report', name: 'PriorityReport', title: '重点事件录入', icon: 'EditPen' },
+    { path: '/home', name: 'Home', title: '首页', icon: 'HomeFilled' },
     { path: '/profile', name: 'Profile', title: '个人中心', icon: 'User' },
   ],
   [ROLES.ADMIN]: [
@@ -62,6 +62,6 @@ export function getButtonPermsByRole(role) {
 
 // 登录成功后默认跳转的首页路由，按角色区分（重点人群只写不查，直接进录入页）
 export function getDefaultRouteByRole(role) {
-  if (role === ROLES.KEY_PERSON) return '/report'
+  // if (role === ROLES.KEY_PERSON) return '/report'
   return '/home'
 }
